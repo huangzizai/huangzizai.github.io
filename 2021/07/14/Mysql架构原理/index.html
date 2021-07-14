@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+
+  
+  <title>Mysql架构原理 | 黄自在的博客</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="提起 MySQL，其实网上已经有一大把教程了，为什么我还要写这篇文章呢，大概是因为网上很多网站都是比较零散，而且描述不够直观，不能系统对 MySQL 相关知识有一个系统的学习，导致不能形成知识体系。为此我撰写了这篇文章试图让这些底层架构相关知识更加直观易懂： 尽量以图文的方式描述技术原理； 涉及到关键的技术，附加官网或者技术书籍来源，方便大家进一步扩展学习； 涉及到的背景知识尽可能做一个交代，比如">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Mysql架构原理">
+<meta property="og:url" content="http://example.com/2021/07/14/Mysql%E6%9E%B6%E6%9E%84%E5%8E%9F%E7%90%86/index.html">
+<meta property="og:site_name" content="黄自在的博客">
+<meta property="og:description" content="提起 MySQL，其实网上已经有一大把教程了，为什么我还要写这篇文章呢，大概是因为网上很多网站都是比较零散，而且描述不够直观，不能系统对 MySQL 相关知识有一个系统的学习，导致不能形成知识体系。为此我撰写了这篇文章试图让这些底层架构相关知识更加直观易懂： 尽量以图文的方式描述技术原理； 涉及到关键的技术，附加官网或者技术书籍来源，方便大家进一步扩展学习； 涉及到的背景知识尽可能做一个交代，比如">
+<meta property="og:locale">
+<meta property="article:published_time" content="2021-07-14T06:01:35.000Z">
+<meta property="article:modified_time" content="2021-07-14T06:09:50.115Z">
+<meta property="article:author" content="黄自在">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="黄自在的博客" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+<meta name="generator" content="Hexo 5.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">黄自在的博客</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://example.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-Mysql架构原理" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2021/07/14/Mysql%E6%9E%B6%E6%9E%84%E5%8E%9F%E7%90%86/" class="article-date">
+  <time datetime="2021-07-14T06:01:35.000Z" itemprop="datePublished">2021-07-14</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      Mysql架构原理
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>提起 MySQL，其实网上已经有一大把教程了，为什么我还要写这篇文章呢，大概是因为网上很多网站都是比较零散，而且描述不够直观，不能系统对 MySQL 相关知识有一个系统的学习，导致不能形成知识体系。为此我撰写了这篇文章试图让这些底层架构相关知识更加直观易懂：</p>
+<p>尽量以图文的方式描述技术原理；</p>
+<p>涉及到关键的技术，附加官网或者技术书籍来源，方便大家进一步扩展学习；</p>
+<p>涉及到的背景知识尽可能做一个交代，比如讨论到 log buffer 的刷盘方式，延伸一下 IO 写磁盘相关知识点。</p>
+<p>好了，MySQL 从不会到精通系列马上就要开始了（看完之后还是不会的话..请忽略这句话）。</p>
+<p>可能会有同学问：为啥不直接学更加先进的 TiDB，或者是强大的 OceanBase。</p>
+<p>其实，MySQL 作为老牌的应用场景广泛的关系型开源数据库，其底层架构是很值得我们学习的，吸收其设计精华，那么我们在平时的方案设计工作中也可以借鉴，如果项目中用的是 MySQL，那么就能够把数据库用的更好了，了解了 MySQL 底层的执行原理，对于调优工作也是有莫大帮助的。本文我重点讲述 MySQL 底层架构，涉及到：</p>
+<p>内存结构：buffer pool、log buffer、change buffer，buffer pool 的页淘汰机制是怎样的；</p>
+<p>磁盘结构：系统表空间、独立表空间、通用表空间、undo表空间、redo log；</p>
+<p>以及IO相关底层原理、查询SQL执行流程、数据页结构和行结构描述、聚集索引和辅助索引的底层数据组织方式、MVCC多版本并发控制的底层实现原理，以及可重复读、读已提交是怎么通过 MVCC 实现的。</p>
+<p>看完文本文，您将了解到：</p>
+<p>整体架构：InnoDB 存储架构是怎样的 (1、MySQL 架构)</p>
+<p>工作原理：查询语句的底层执行流程是怎样的 (2、查询 SQL 执行流程)</p>
+<p>IO 性能：文件IO操作写磁盘有哪几种方式，有什么 IO 优化方式 (3.1.2、关于磁盘 IO 的方式)</p>
+<p>缓存：InnoDB缓存(buffer pool, log buffer)的刷新方式有哪些（3.1.2.2、innodb_flush_method）</p>
+<p>缓存：log buffer 是在什么时候写入到磁盘的（3.10.2、如何保证数据不丢失 - 其中第四步 log buffer 持久化到磁盘的时机为）</p>
+<p>缓存：为什么 redo log prepare 状态也要写磁盘？（3.10.2、如何保证数据不丢失 - 为什么第二步 redo log prepare 状态也要写磁盘？）</p>
+<p>缓存：脏页写盘一般发生在什么时候（3.10.2、如何保证数据不丢失 - 其中第五步：脏页刷新到磁盘的时机为）</p>
+<p>缓存：为什么唯一索引的更新不可以借助 change buffer（3.2、Change Buffer）</p>
+<p>缓存：log buffer的日志刷盘控制参数innodb_flush_log_at_trx_commit对写性能有什么影响（3.4.1、配置参数）</p>
+<p>缓存：buffer pool 的 LRU 是如何实现的，为什么要这样实现（3.1.1、缓冲池 LRU 算法）</p>
+<p>表存储：系统表空间的结构，MySQL InnoDB 磁盘存储格式，各种表空间(系统表空间，独立表空间，通用表空间)的作用和优缺点是什么，ibdata、ibd、frm文件分别是干嘛的（3.5、表空间）</p>
+<p>行字段存储：底层页和行的存储格式（3.6、InnoDB 底层逻辑存储结构）</p>
+<p>行字段存储：varchar，null底层是如何存储的，最大可用存储多大的长度（3.6.3.1、MySQL 中 varchar 最大长度是多少）</p>
+<p>行字段存储：行记录太长了，一页存不下，该怎么存储？（3.6.3.2、行记录超过页大小如何存储）</p>
+<p>索引：数据库索引的组织方式是怎样的，明白为什么要采用B+树，而不是哈希表、二叉树或者 B 树（3.7、索引 - 为什么 MySQL 使用 B+树）</p>
+<p>索引：索引组织方式是怎样的，为什么大字段会影响表性能(查询性能，更新性能)（3.7、索引）</p>
+<p>索引：覆盖索引、联合索引什么情况下会生效（3.7.2、辅助索引）</p>
+<p>索引：什么是索引下推，索引下推减少了哪方面的开销？（3.7.2、辅助索引 - 索引条件下推）</p>
+<p>索引：Change Buffer对二级索引 DML 语句有什么优化（3.2、Change Buffer）</p>
+<p>数据完整性：MySQL 是如何保证数据完整性的，redo log、undo log和buffer pool数据完整性的关键作用分别是什么（3.10.2、如何保证数据不丢失）</p>
+<p>MVCC：MVCC底层是怎么实现的，可重复读和读已提交是怎么实现的（3.11.2、MVCC 实现原理）</p>
+<p>双写缓冲区有什么作用（3.9、Doublewrite Buffer）</p>
+<p>Redo Log 在一个事务中是在什么时候写入的？binlog 和 Redo Log 有什么区别？（3.10.1、Redo Log 在事务中的写入时机）</p>
+<p>1、MySQL 架构<br>如下图为 MySQL 架构涉及到的常用组件：</p>
+<p>2、查询 SQL 执行流程<br>有如下表格：</p>
+<p>我们执行以下 sql：</p>
+<p>select * from t_user where user_id=10000;<br>2.1、MySQL 客户端与服务器建立连接<br>如下图，建立过程：</p>
+<p>客户端通过 mysql 命令发起连接请求；</p>
+<p>经过三次握手后与服务端建立 TCP 连接；</p>
+<p>连接器接收到请求之后使用用户密码进行身份验证；</p>
+<p>验证通过之后，获取用户的权限信息缓存起来，该连接后面都是基于该缓存中的权限执行 sql；</p>
+<p>对于 Java 应用程序来说，一般会把建立好的连接放入数据库连接池中进行复用，只要这个连接不关闭，就会一直在 MySQL 服务端保持着，可以通过show processlist命令查看，如下：</p>
+<p>注意，这里有个 Time，表示这个连接多久没有动静了，上面例子是 656 秒没有动静，默认地，如果超过 8 个小时还没有动静，连接器就会自动断开连接，可以通过wait_timeout参数进行控制。</p>
+<p>2.2、执行 SQL<br>如下图，执行 sql：</p>
+<p>服务端接收到客户端的查询 sql 之后，先尝试从查询缓存中查询该 sql 是否已经有缓存的结果了，如果有则直接返回结果，如果没有则执行下一步；</p>
+<p>分析器拿到 sql 之后会尝试对 sql 语句进行词法分析和语法分析，校验语法的正确性，通过之后继续往下执行；</p>
+<p>优化器拿到分析器的 sql 之后，开始继续解析 sql，判断到需要走什么索引，根据实际情况重写 sql，最终生成执行计划；</p>
+<p>执行器根据执行计划执行 sql，执行之前会先进行操作权限校验；然后根据表存储引擎调用对饮接口进行查询数据，这里的扫描行数就是指的接口返回的记录数，执行器拿到返回记录之后进一步加工，如本例子：</p>
+<p>执行器拿到 select * from t_user where user_id=10000 的所有记录，在依次判断 user_name 是不是等于”arthinking”，获取到匹配的记录。</p>
+<p>3、InnoDB 引擎架构<br>如下图，为存储引擎的架构：</p>
+<p>其实内存中的结构不太好直接观察到，不过磁盘的还是可以看到的，我们找到磁盘中 MySQL 的数据文件夹看看：</p>
+<p>cd innodb_data_home_dir 查看 MySQL 数据目录：</p>
+<p> |- ib_buffer_pool  // 保存缓冲池中页面的表空间ID和页面ID，用于重启恢复缓冲池<br> |- ib_logfile0  // redo log 磁盘文件1<br> |- ib_logfile1  // redo log 磁盘文件2，默认情况下，重做日志存在磁盘的这两个文件中，循环的方式写入重做日志<br> |- ibdata1  // 系统表空间文件<br> |- ibtmp1  // 默认临时表空间文件，可通过innodb_temp_data_file_path属性指定文件位置<br> |- mysql/<br> |- mysql-bin.000001  // bin log文件<br> |- mysql-bin.000001  // bin log文件<br> …<br> |- mysql-bin.index  // bin log文件索引<br> |- mysqld.local.err  // 错误日志<br> |- mysqld.local.pid  // mysql进程号<br> |- performance_schema/  // performance_schema数据库<br> |- sys/  // sys数据库<br> |- test/  // 数据库文件夹<br>     |- db.opt  // test数据库配置文件，包含数据库字符集属性<br>     |- t.frm  // 数据表元数据文件，不管是使用独立表空间还是系统表空间，每个表都对应有一个<br>     |- t.ibd  // 数据库表独立表空间文件，如果使用的是独立表空间，则一个表对应一个ibd文件，否则保存在系统表空间文件中<br>innodb_data_home_dir[30]</p>
+<p>ib_buffer_pool[31]</p>
+<p>ib_logfile0[32]</p>
+<p>ibtmp1[33]</p>
+<p>db.opt[34]</p>
+<p>接下来我们逐一来介绍。</p>
+<p>3.1、buffer pool</p>
+<p>buffer pool（缓冲池）是主内存中的一个区域，在 InnoDB 访问表数据和索引数据的时候，会顺便把对应的数据页缓存到缓冲池中。如果直接从缓冲池中直接读取数据将会加快处理速度。在专用服务器上，通常将 80%左右的物理内存分配给缓冲池。</p>
+<p>为了提高缓存管理效率，缓冲池把页面链接为列表，使用改进版的LRU算法将很少使用的数据从缓存中老化淘汰掉。</p>
+<p>3.1.1、缓冲池 LRU 算法<br>通过使用改进版的 LRU 算法来管理缓冲池列表。</p>
+<p>当需要把新页面存储到缓冲池中的时候，将淘汰最近最少使用的页面，并将新页面添加到旧子列表的头部。</p>
+<p>该算法运行方式：</p>
+<p>默认 3/8 缓冲池用于旧子列表；</p>
+<p>当新页面如缓冲池时，首先将其插入旧子列表头部；</p>
+<p>重复访问旧子列表的页面，将使其移动至新子列表的头部；</p>
+<p>随着数据库的运行，页面逐步移至列表尾部，缓冲池中未被方位的页面最终将被老化淘汰。</p>
+<p>相关优化参数：</p>
+<p><code>innodb_old_blocks_pct</code>：控制 LRU 列表中旧子列表的百分比，默认是 37，也就是 3/8，可选范围为 5~95；</p>
+<p><code>innodb_old_blocks_time</code> ：指定第一次访问页面后的时间窗口，该时间窗口内访问页面不会使其移动到 LRU 列表的最前面。默认是 1000，也就是 1 秒。</p>
+<p>innodb_old_blocks_time 很重要，有了这 1 秒，对于全表扫描，由于是顺序扫描的，一般同一个数据页的数据都是在一秒内访问完成的，不会升级到新子列表中，一直在旧子列表淘汰数据，所以不会影响到新子列表的缓存。</p>
+<p>3.1.2、关于磁盘 IO 的方式</p>
+<p>O_DIRECT是innodb_flush_method参数的一个可选值。</p>
+<p>这里先介绍下和数据库性能密切相关的文件 IO 操作方法</p>
+<p>3.1.2.1、文件 IO 操作方法<br>数据库系统是基于文件系统的，其性能和设备读写的机制有密切的关系。</p>
+<p>open：打开文件[1]<br>int open(const char *pathname, int flags);<br>系统调用 Open 会为该进程一个文件描述符 fd，常用的 flags 如下：</p>
+<p>O_WRONLY：表示我们以”写”的方式打开，告诉内核我们需要向文件中写入数据；</p>
+<p>O_DSYNC：每次 write 都等待物理 I/O 完成，但是如果写操作不影响读取刚写入的数据，则不等待文件属性更新；</p>
+<p>O_SYNC：每次 write 都等到物理 I/O 完成，包括 write 引起的文件属性的更新；</p>
+<p>O_DIRECT：执行磁盘 IO 时绕过缓冲区高速缓存(内核缓冲区)，从用户空间直接将数据传递到文件或磁盘设备，称为直接 IO（direct IO）。因为没有了 OS cache，所以会 O_DIRECT 降低文件的顺序读写的效率。</p>
+<p>write：写文件^2<br>ssize_t write(int fd, const void *buf, size_t count);<br>使用 open 打开文件获取到文件描述符之后，可以调用 write 函数来写文件，具体表现根据 open 函数参数的不同而不同弄。</p>
+<p>fsync &amp; fdatasync：刷新文件[3]<br>#include &lt;unistd.h&gt;</p>
+<p>int fsync(int fd);</p>
+<p>int fdatasync(int fd);<br>fdatasync：操作完 write 之后，我们可以调用 fdatasync 将文件数据块 flush 到磁盘，只要 fdatasync 返回成功，则可以认为数据已经写到磁盘了；</p>
+<p>fsync：与 O_SYNC 参数类似，fsync 还会更新文件 metadata 到磁盘；</p>
+<p>sync：sync 只是将修改过的块缓冲区写入队列，然后就返回，不等实际写磁盘操作完成；</p>
+<p>为了保证文件更新成功持久化到硬盘，除了调用 write 方法，还需要调用 fsync。</p>
+<p>大致交互流程如下图：</p>
+<p>更多关于磁盘 IO 的相关内容，可以阅读：On Disk IO, Part 1: Flavors of IO[27]</p>
+<p>fsync 性能问题：除了刷脏页到磁盘，fsync 还会同步文件 metadata，而文件数据和 metadata 通常存放在磁盘不同地方，所以 fsync 至少需要两次 IO 操作。</p>
+<p>对 fsync 性能的优化建议：由于以上性能问题，如果能够减少 metadata 的更新，那么就可以使用 fdatasync 了。因此需要确保文件的尺寸在 write 前后没有发生变化。为此，可以创建固定大小的文件进行写，写完则开启新的文件继续写。</p>
+<p>3.1.2.2、innodb_flush_method<br>innodb_flush_method定义用于将数据刷新到InnoDB数据文件和日志文件的方法，这可能会影响 I/O 吞吐量。</p>
+<p>以下是具体参数说明：</p>
+<p>比较常用的是这三种：</p>
+<p>fsync<br>默认值，使用fsync()系统调用来 flush 数据文件和日志文件到磁盘；</p>
+<p>O_DSYNC<br>由于 open 函数的 O_DSYNC 参数在许多 Unix 系统上都存中问题，因此 InnoDB 不直接使用 O_DSYNC。</p>
+<p>InnoDB用于O_SYNC 打开和刷新日志文件，fsync()刷新数据文件。</p>
+<p>表现为：写日志操作是在 write 函数完成，数据文件写入是通过fsync()系统调用来完成；</p>
+<p>O_DIRECT<br>使用O_DIRECT （在 Solaris 上对应为directio()）打开数据文件，并用于fsync()刷新数据文件和日志文件。此选项在某些 GNU/Linux 版本，FreeBSD 和 Solaris 上可用。</p>
+<p>表现为：数据文件写入直接从 buffer pool 到磁盘，不经过操作系统缓冲，日志还是需要经过操作系统缓存；</p>
+<p>O_DIRECT_NO_FSYNC<br>在刷新 I/O 期间InnoDB使用O_DIRECT，并且每次 write 操作后跳过fsync()系统调用。</p>
+<p>此设置适用于某些类型的文件系统，但不适用于其他类型的文件系统。例如，它不适用于 XFS。如果不确定所使用的文件系统是否需要 fsync()（例如保留所有文件元数据），请改用 O_DIRECT。</p>
+<p>如下图所示：</p>
+<p>为什么使用了 O_DIRECT 配置后还需要调用 fsync()?</p>
+<p>参考 MySQL 的这个 bug：Innodb calls fsync for writes with innodb_flush_method=O_DIRECT[35]</p>
+<p>Domas 进行的一些测试表明，如果没有 fsync，某些文件系统（XFS）不会同步元数据。如果元数据会更改，那么您仍然需要使用 fsync（或 O_SYNC 来打开文件）。</p>
+<p>例如，如果在启用 O_DIRECT 的情况下增大文件大小，它仍将写入文件的新部分，但是由于元数据不能反映文件的新大小，因此如果此刻系统发生崩溃，文件尾部可能会丢失。</p>
+<p>为此：当重要的元数据发生更改时，请继续使用 fsync 或除 O_DIRECT 之外，也可以选择使用 O_SYNC。</p>
+<p>MySQL 从 v5.6.7 起提供了O_DIRECT_NO_FSYNC选项来解决此类问题。</p>
+<p>3.2、Change Buffer<br>change buffer 是一种特殊的数据结构，当二级索引页(非唯一索引)不在缓冲池中时，它们会缓存这些更改 。当页面通过其他读取操作加载到缓冲池中时，再将由INSERT，UPDATE或DELETE操作（DML）产生的 change buffer 合并到 buffer pool 的数据页中。</p>
+<p>为什么唯一索引不可以使用 chage buffer？</p>
+<p>针对唯一索引，如果 buffer pool 不存在对应的数据页，还是需要先去磁盘加载数据页，才能判断记录是否重复，这一步避免不了。</p>
+<p>而普通索引是非唯一的，插入的时候以相对随机的顺序发生，删除和更新也会影响索引树中不相邻的二级索引树，通过使用合并缓冲，避免了在磁盘产生大量的随机 IO 访问获取普通索引页。</p>
+<p>问题</p>
+<p>当有许多受影响的行和许多辅助索引要更新时，change buffer 合并可能需要几个小时，在此期间，I/O 会增加，可能会导致查询效率大大降低，即使在事务提交之后，或者服务器重启之后，change buffer 合并操作也会继续发生。相关阅读：Section 14.22.2, “Forcing InnoDB Recovery”</p>
+<p>3.3、自适应哈希索引<br>自适应哈希索引功能由innodb_adaptive_hash_index变量启用 ，或在服务器启动时由–skip-innodb-adaptive-hash-index禁用。</p>
+<p>3.4、Log Buffer<br>log buffer(日志缓冲区)用于保存要写入磁盘上的 log file(日志文件)的数据。日志缓存区的内容会定期刷新到磁盘。</p>
+<p>日志缓冲区大小由innodb_log_buffer_size变量定义 。默认大小为 16MB。较大的日志缓冲区可以让大型事务在提交之前无需将 redo log 写入磁盘。</p>
+<p>如果您有更新，插入或者删除多行的事务，尝试增大日志缓冲区的大小可以节省磁盘 I/O。</p>
+<p>3.4.1、配置参数<br>innodb_flush_log_at_trx_commit</p>
+<p>innodb_flush_log_at_trx_commit 变量控制如何将日志缓冲区的内容写入并刷新到磁盘。</p>
+<p>该参数控制是否严格存储 ACID 还是尝试获取更高的性能，可以通过该参数获取更好的性能，但是会导致在系统崩溃的过程中导致数据丢失。</p>
+<p>可选参数：</p>
+<p>0，事务提交之后，日志只记录到 log buffer 中，每秒写一次日志到缓存并刷新到磁盘，尚未刷新的日志可能会丢失；</p>
+<p>1，要完全符合 ACID，必须使用该值，表示日志在每次事务提交时写入缓存并刷新到磁盘；</p>
+<p>2，每次事务提交之后，日志写到 page cache，每秒刷一次到磁盘，尚未刷新的日志可能会丢失；</p>
+<p>innodb_flush_log_at_timeout</p>
+<p>innodb_flush_log_at_timeout 变量控制日志刷新频率。可让您将日志刷新频率设置为N秒（其中N为1 … 2700，默认值为 1）</p>
+<p>为了保证数据不丢失，请执行以下操作：</p>
+<p>如果启用了 binlog，则设置：sync_binlog=1;</p>
+<p>innodb_flush_log_at_trx_commit=1;</p>
+<p>配置效果如下图所示：</p>
+<p>3.5、表空间<br>一个InnoDB表及其索引可以在建在系统表空间中，或者是在一个 独立表空间 中，或在 通用表空间。</p>
+<p>当<code>innodb_file_per_table</code>启用时，通常是将表存放在独立表空间中，这是默认配置；</p>
+<p>当<code>innodb_file_per_table</code>禁用时，则会在系统表空间中创建表；</p>
+<p>要在通用表空间中创建表，请使用 <code>CREATE TABLE … TABLESPACE</code>语法。有关更多信息，请参见官方文档 14.6.3.3 General Tablespaces。</p>
+<p>表空间概览图：</p>
+<p>表空间涉及的文件<br>相关文件默认在磁盘中的innodb_data_home_dir目录下：</p>
+<p>|- ibdata1  // 系统表空间文件<br>|- ibtmp1  // 默认临时表空间文件，可通过innodb_temp_data_file_path属性指定文件位置<br>|- test/  // 数据库文件夹<br>    |- db.opt  // test数据库配置文件，包含数据库字符集属性<br>    |- t.frm  // 数据表元数据文件，不管是使用独立表空间还是系统表空间，每个表都对应有一个<br>    |- t.ibd  // 数据库表独立表空间文件，如果使用的是独立表空间，则一个表对应一个ibd文件，否则保存在系统表空间文件中<br>frm 文件</p>
+<p>创建一个InnoDB表时，MySQL 在数据库目录中创建一个.frm文件。frm 文件包含 MySQL 表的元数据(如表定义)。每个 InnoDB 表都有一个.frm 文件。</p>
+<p>与其他 MySQL 存储引擎不同， InnoDB它还在系统表空间内的自身内部数据字典中编码有关表的信息。MySQL 删除表或数据库时，将删除一个或多个.frm文件以及InnoDB数据字典中的相应条目。</p>
+<p>因此，在 InnoDB 中，您不能仅通过移动.frm 文件来移动表。有关移动InnoDB 表的信息，请参见官方文档14.6.1.4 Moving or Copying InnoDB Tables。</p>
+<p>ibd 文件</p>
+<p>对于在独立表空间创建的表，还会在数据库目录中生成一个 .ibd表空间文件。</p>
+<p>在通用表空间中创建的表在现有的常规表空间 .ibd文件中创建。常规表空间文件可以在 MySQL 数据目录内部或外部创建。有关更多信息，请参见官方文档14.6.3.3 General Tablespaces。</p>
+<p>ibdata 文件</p>
+<p>系统表空间文件，在 InnoDB系统表空间中创建的表在 ibdata 中创建。</p>
+<p>3.5.1、系统表空间<br>系统表空间由一个或多个数据文件(ibdata 文件)组成。其中包含与InnoDB相关对象有关的元数据（InnoDB 数据字典 data dictionary），以及更改缓冲区（change buffer）， 双写缓冲区（doublewrite buffer）和撤消日志（undo logs）的存储区 。</p>
+<p>InnoDB 如果表是在系统表空间中创建的，则系统表空间中也包含表的表数据和索引数据。</p>
+<p>系统表空间的问题<br>在 MySQL 5.6.7 之前，默认设置是将所有InnoDB表和索引保留 在系统表空间内，这通常会导致该文件变得非常大。因为系统表空间永远不会缩小，所以如果先加载然后删除大量临时数据，则可能会出现存储问题。</p>
+<p>在 MySQL 5.7 中，默认设置为 独立表空间模式，其中每个表及其相关索引存储在单独的 .ibd 文件中。此默认设置使使用Barracuda文件格式的InnoDB功能更容易使用，例如表压缩，页外列的有效存储以及大索引键前缀（innodb_large_prefix）。</p>
+<p>将所有表数据保留在系统表空间或单独的 .ibd文件中通常会对存储管理产生影响。</p>
+<p>InnoDB在 MySQL 5.7.6 中引入了通用表空间[6]，这些表空间也由.ibd文件表示 。通用表空间是使用CREATE TABLESPACE语法创建的共享表空间。它们可以在 MySQL 数据目录之外创建，能够容纳多个表，并支持所有行格式的表。</p>
+<p>3.5.2、独立表空间<br>MySQL 5.7 中，配置参数：innodb_file_per_table，默认处于启用状态，这是一个重要的配置选项，会影响InnoDB文件存储，功能的可用性和 I/O 特性等。</p>
+<p>启用之后，每个表的数据和索引是存放在单独的.ibd 文件中的，而不是在系统表空间的共享 ibdata 文件中。</p>
+<p>优点<br>您可以更加灵活的选择数据压缩[4]的行格式，如：</p>
+<p>默认情况下（innodb_page_size=16K），前缀索引^5最多包含 768 个字节。如果开启 innodb_large_prefix，且 Innodb 表的存储行格式为 DYNAMIC 或 COMPRESSED，则前缀索引最多可包含 3072 个字节，前缀索引也同样适用；</p>
+<p>TRUNCATE TABLE执行的更快，并且回收的空间不会继续保留，而是让操作系统使用；</p>
+<p>可以在单独的存储设备上创建每表文件表空间数据文件，以进行 I / O 优化，空间管理或备份。请参见 14.6.1.2 Creating Tables Externally；</p>
+<p>缺点<br>独立表空间中的未使用空间只能由同一个表使用，如果管理不当，会造成空间浪费；</p>
+<p>多个表需要刷盘，只能执行多次 fsync，无法合并多个表的写操作，这可能会导致更多的 fsync 操作总数；</p>
+<p>mysqld必须为每个表文件空间保留一个打开的文件句柄，如果表数量多，可能会影响性能；</p>
+<p>每个表都需要自己的数据文件，需要更多的文件描述符；</p>
+<p>即使启用了 innodb_file_per_table 参数，每张表空间存放的只是数据、索引和插入缓存 Bitmap 页，其他数据如回滚信息、插入缓冲索引页、系统事务信息、二次写缓冲等还是存放在原来的共享表空间中。</p>
+<p>3.5.3、通用表空间<br>通用表空间使用CREATE TABLESPACE语法创建。</p>
+<p>类似于系统表空间，通用表空间是共享表空间，可以存储多个表的数据。</p>
+<p>通用表空间比独立表空间具有潜在的内存优势，服务器在表空间的生存期内将表空间元数据保留在内存中。一个通用表空间通常可以存放多个表数据，消耗更少的表空间元数据内存。</p>
+<p>数据文件可以放置在 MySQL 数据目录或独立于 MySQL 数据目录。</p>
+<p>3.5.4、undo 表空间<br>undo 表空间包含 undo log。</p>
+<p>innodb_rollback_segments变量定义分配给每个撤消表空间的回滚段的数量。</p>
+<p>undo log可以存储在一个或多个undo表空间中，而不是系统表空间中。</p>
+<p>在默认配置中，撤消日志位于系统表空间中。SSD 存储更适合 undo log 的 I/O 模式，为此，可以把 undo log 存放在有别于系统表空间的 ssd 硬盘中。</p>
+<p>innodb_undo_tablespaces 配置选项控制 undo 表空间的数量。</p>
+<p>3.5.5、临时表空间<br>由用户创建的非压缩临时表和磁盘内部临时表是在共享临时表空间中创建的。</p>
+<p>innodb_temp_data_file_path 配置选项指定零时表空间文件的路径，如果未指定，则默认在 innodb_data_home_dir目录中创建一个略大于 12MB 的自动扩展数据文件ibtmp1 。</p>
+<p>使用ROW_FORMAT=COMPRESSED属性创建的压缩临时表，是在独立表空间中的临时文件目录中创建的 。</p>
+<p>服务启动的时候创建临时表空间，关闭的时候销毁临时表空间。如果临时表空间创建失败，则意味着服务启动失败。</p>
+<p>3.6、InnoDB 底层逻辑存储结构<br>在介绍索引之前，我们有必要了解一下 InnoDB 底层的逻辑存储结构，因为索引是基于这个底层逻辑存储结构创建的。截止到目前，我们所展示的都仅仅是物理磁盘中的逻辑视图，接下来我们就来看看底层的视图。</p>
+<p>3.6.1、ibd 文件组织结构<br>现在我们打开一个表空间 ibd 文件，看看里面都是如何组织数据的？</p>
+<p>如下图，表空间由段(segment)、区(extent)、页(page)组成。</p>
+<p>InnoDB 最小的存储单位是页，默认每个页大小是 16k。</p>
+<p>而 InnoDB 存储引擎是面向行的(row-oriented)，数据按行进行存放，每个页规定最多允许存放的行数=16k/2 - 200，即 7992 行。</p>
+<p>段：如数据段、索引段、回滚段等。InnoDB 存储引擎是 B+树索引组织的，所以数据即索引，索引即数据。B+树的叶子节点存储的都是数据段的数据。</p>
+<p>3.6.2、数据页结构[13]</p>
+<p>关于 Infimun 和 Supremum：首次创建索引时，InnoDB 会在根页面中自动设置一个最小记录和一个最高记录，并且永远不会删除它们。最低记录和最高记录可以视为索引页开销的一部分。最初，它们都存在于根页面上，但是随着索引的增长，最低记录将存在于第一或最低叶子页上，最高记录将出现在最后或最大关键字页上。</p>
+<p>3.6.3、行记录结构描述[14]<br>先来讲讲 Compact 行记录格式，Compact 是 MySQL5.0 引入的，设计目标是高效的存储数据，让一个页能够存放更多的数据，从而实现更快的 B+树查找。</p>
+<p>记录头用于将连续的记录链接在一起，并用于行级锁定。</p>
+<p>每行数据除了用户定义的列外，还有两个隐藏列：</p>
+<p>6 个字节的事务 ID 列；</p>
+<p>7 个字节的回滚指针列；</p>
+<p>如果 InnoDB 没有指定主键，还会增加一个 6 个字节的 rowid 列；</p>
+<p>而记录头信息包[12]含如下内容：</p>
+<p>更详细的页结构参考官网：22.2 InnoDB Page Structure</p>
+<p>更详细的行结构参考官网：22.1 InnoDB Record Structure</p>
+<p>更详细的行格式参考官网：14.11 InnoDB Row Formats</p>
+<p>根据以上格式，可以得出数据页内的记录组织方式：</p>
+<p>3.6.3.1、MySQL 中 varchar 最大长度是多少<br>上面表格描述我们知道，一个字段最长限制是 65535 个字节，这是存储长度的限制。</p>
+<p>而 MySQL 中对存储是有限制的，具体参考：8.4.7 Limits on Table Column Count and Row Size</p>
+<p>MySQL 对每个表有 4096 列的硬限制，但是对于给定的表，有效最大值可能会更少；</p>
+<p>MySQL 表的每行行最大限制为 65,535 字节，这是逻辑的限制；实际存储的时候，表的物理最大行大小略小于页面的一半。如果一行的长度少于一页的一半，则所有行都将存储在本地页面内。如果它超过一页的一半，那么将选择可变长度列用于外部页外存储，直到该行大小控制在半页之内为止。</p>
+<p>而实际能够存储的字符是跟编码有关的。</p>
+<p>背景知识：</p>
+<p>MySQL 4.0 版本以下，varchar(10)，代表 10 个字节，如果存放 UTF8 汉字，那么只能存 3 个（每个汉字 3 字节）；</p>
+<p>MySQL 5.0 版本以上，varchar(10)，指的是 10 个字符，无论存放的是数字、字母还是 UTF8 汉字（每个汉字 3 字节），都可以存放 10 个，最大大小是 65532 字节；</p>
+<p>因此，Mysql5 根据编码不同,存储大小也不同。</p>
+<p>那么假设我们使用的是 utf8 编码，那么每个字符最多占用 3 个字节，也就是最多定义 varchar(21845)个字符，如果是 ascii 编码，一个字符相当于一个字节，最多定义 varchar(65535)个字符，下面我们验证下。</p>
+<p>我们尝试创建一个这样的字段：</p>
+<p>CREATE TABLE <code>t10</code> ( <code>id</code> int(11) NOT NULL,<br>                  <code>a</code> int(11) NOT NULL,<br>                  PRIMARY KEY (<code>id</code>)<br>                 ) ENGINE=InnoDB CHARSET=ascii ROW_FORMAT=Compact;</p>
+<p>alter table t10 add <code>str</code> varchar(21845) DEFAULT NULL;</p>
+<p>alter table t10 add <code>str</code> varchar(65535) DEFAULT NULL;<br>发现提示这个错误：</p>
+<p>mysql&gt; alter table t10 add <code>str</code> varchar(65535) DEFAULT NULL;<br>ERROR 1118 (42000): Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs<br>原因是按照以上的行格式介绍，变长字段长度列表记录也需要占用空间，占用 2 个字节，另外这里是允许为空字段，在 8 位之内，所以 NULL 标志位占用 1 个字节，所以我们总共可以存储的字符数是：</p>
+<p>65535 - 2 - 2 - 4 - 4=65534</p>
+<p>其中 -2 个字节表示变长字段列表，-1 表示 NULL 标志位，两个-4 表示两个 int 类型字段占用大小</p>
+<p>所以实际上能够容纳的 varchar 大小为：65524，我们验证下：</p>
+<p>3.6.3.2、行记录超过页大小如何存储<br>MySQL 表的内部表示具有 65,535 字节的最大行大小限制。InnoDB 对于 4KB，8KB，16KB 和 32KB innodb_page_size 设置，表的最大行大小（适用于本地存储在数据库页面内的数据）略小于页面的一半 。如果包含 可变长度列的InnoDB 行超过最大行大小，那么将选择可变长度列用于外部页外存储。</p>
+<p>可变长度列由于太长而无法容纳在 B 树页面上，这个时候会把可变长度列存储在单独分配的磁盘页面上，这些页面称为溢出页面，这些列称为页外列。页外列的值存储在由溢出页面构成的单链接列表中。</p>
+<p>InnoDB存储引擎支持四种行格式：REDUNDANT，COMPACT， DYNAMIC，和COMPRESSED。不同的行格式，对溢出的阈值和处理方式有所区别，详细参考：14.11 InnoDB Row Formats。</p>
+<p>COMPACT 行格式处理方式</p>
+<p>使用COMPACT行格式的表将前 768 个字节的变长列值（VARCHAR， VARBINARY和 BLOB和 TEXT类型）存储在B树节点内的索引记录中，其余的存储在溢出页上。</p>
+<p>如果列的值等于或小于 768 个字节，则不使用溢出页，因此可以节省一些 I / O。</p>
+<p>如果查过了 768 个字节，那么会按照如下方式进行存储：</p>
+<p>DYNAMIC 行格式处理方式</p>
+<p>DYNAMIC行格式提供与COMPACT行格式相同的存储特性，但改进了超长可变长度列的存储能力和支持大索引键前缀。</p>
+<p>InnoDB 可以完全在页外存储过长的可变长度列值（针对 VARCHAR， VARBINARY和 BLOB和 TEXT类型），而聚集索引记录仅包含指向溢出页的 20 字节指针。大于或等于 768 字节的固定长度字段被编码为可变长度字段。</p>
+<p>表中大字段引发的问题</p>
+<p>如果一个表中有过多的可变长度大字段，导致一行记录太长，而整个时候使用的是 COMPACT 行格式，那么就可能会插入数据报错。</p>
+<p>如，页面大小事 16k，根据前面描述我们知道，MySQL 限制一页最少要存储两行数据，如果很多可变长度大字段，在使用 COMPACT 的情况下，仍然会把大字段的前面 768 个字节存在索引页中，可以算出最多支持的大字段：1024 * 16 / 2 / 768 = 10.67，那么超过 10 个可变长度大字段就会插入失败了。</p>
+<p>这个时候可以把 row format 改为：DYNAMIC。</p>
+<p>3.7、索引<br>前面我们了解了 InnoDB 底层的存储结构，即：以 B+树的方式组织数据页。另外了解了数据页中的数据行的存储方式。</p>
+<p>而构建 B+树索引的时候必须要选定一个或者多个字段作为索引的值，如果索引选择的是主键，那么我们就称为聚集索引，否则就是二级索引。</p>
+<p>为什么 MySQL 使用 B+树？</p>
+<p>哈希表虽然可以提供 O(1)的单行数据操作性能，但却不能很好的支持排序和范围查找，会导致全表扫描；</p>
+<p>B 树可以再非叶子节点存储数据，但是这可能会导致查询连续数据的时候增加更多的 I/O 操作；</p>
+<p>而 B+树数据都存放在叶子节点，叶子节点通过指针相互连接，可以减少顺序遍历时产生的额外随机 I/O</p>
+<p>更新详细解释: 为什么 MySQL 使用 B+ 树[29]</p>
+<p>3.7.1、聚集索引<br>了解到上面的底层逻辑存储结构之后，我们进一步来看看 InnoDB 是怎么通过 B+树来组织存储数据的。</p>
+<p>首先来介绍下聚集索引。</p>
+<p>聚集索引<br>主键索引的 InnoDB 术语。</p>
+<p>下面我们创建一张测试表，并插入数据，来构造一颗 B+树：</p>
+<p> CREATE TABLE t20 (<br>   id int NOT NULL,<br>   a int NOT NULL,<br>   b int,<br>   c int,<br>   PRIMARY KEY (<code>id</code>)<br> ) ENGINE=InnoDB; </p>
+<p> insert into t20 values(20, 1, 2, 1);<br> insert into t20 values(40, 1, 2, 5);<br> insert into t20 values(30, 3, 2, 4);<br> insert into t20 values(50, 3, 6, 2);<br> insert into t20 values(10, 1, 1, 1);<br>可以看到，虽然我们是 id 乱序插入的，但是插入之后查出来的确是排序好的：</p>
+<p>这个排序就是 B+索引树构建的。</p>
+<p>我们可以通过这个在线的动态演示工具来看看 B+树的构造过程，最终结果如下：</p>
+<p>实际存放在数据库中的模型因页面大小不一样而有所不同，这里为了简化模型，我们按照 B+树的通用模型来解释数据的存储结构。</p>
+<p>类似的，我们的数据也是这种组织形式的，该 B+树中，我们以主键为索引进行构建，并且把完整的记录存到对应的页下面：</p>
+<p>其中蓝色的是索引页，橙色的是数据页。</p>
+<p>每个页的大小默认为 16k，如果插入新的数据行，这个时候就要申请新的数据页了，然后挪动部分数据过去，重新调整 B+树，这个过程称为页分裂，这个过程会影响性能。</p>
+<p>相反的，如果InnoDB索引页的填充因子下降到之下MERGE_THRESHOLD，默认情况下为 50％（如果未指定），则InnoDB尝试收缩索引树以释放页面。</p>
+<p>自增主键的插入是递增顺序插入的，每次添加记录都是追加的，不涉及到记录的挪动，不会触发叶子节点的分裂，而一般业务字段做主键，往往都不是有序插入的，写成本比较高，所以我们更倾向于使用自增字段作为主键。</p>
+<p>聚集索引注意事项<br>当在表上面定义了PRIMARY KEY之后，InnoDB 会把它作为聚集索引。为此，为你的每个表定义一个PRIMARY KEY。如果没有唯一并且非空的字段或者一组列，那么请添加一个自增列；</p>
+<p>如果您没有为表定义PRIMARY KEY，则 MySQL 会找到第一个不带 null 值的 UNIQUE 索引，并其用作聚集索引；</p>
+<p>如果表没有PRIMARY KEY或没有合适的UNIQUE索引，则InnoDB 内部会生成一个隐藏的聚集索引GEN_CLUST_INDEX，作为行 ID，行 ID 是一个 6 字节的字段，随着数据的插入而自增。</p>
+<p>聚集索引查找<br>根据索引进行查找 id=50 的记录，如下图，沿着 B+树一直往下寻找，最终找到第四页，然后把该页加载到 buffer pool 中，在缓存中遍历对比查找，由于里面的行记录是顺序组织的，所以很快就可以定位到记录了。</p>
+<p>3.7.2、辅助索引<br>除了聚集索引之外的所有索引都称为辅助索引(二级索引)。在 InnoDB 中，辅助索引中每个记录都包含该行的主键列以及为辅助索引指定的列。</p>
+<p>在辅助索引中查找到记录，可以得到记录的主键索引 ID，然后可以通过这个主键索引 ID 去聚集索引中搜索具体的记录，这个过程称为回表操作。</p>
+<p>如果主键较长，则辅助索引将使用更多空间，因此具有短的主键是有利的。</p>
+<p>下面我们给刚刚的表添加一个组合联合索引</p>
+<p>– 添加多一个字段<br>alter table t20 add column d varchar(20) not null default ‘’;<br>– 添加一个联合索引4alter table t20 add index idx_abc(a, b, c);<br>添加之后组合索引 B+树如下，其中索引 key 为 abc 三个字段的组合，索引存储的记录为主键 ID：</p>
+<p>覆盖索引(Using index)<br>InnoDB 存储引擎支持覆盖索引，即从辅助索引中就可以得到查询的记录，而不需要回表去查询聚集索引中的记录，从而减少大量的 IO 操作。下面的查询既是用到了覆盖索引 idx_abc：</p>
+<p>select a, b from t20 where a &gt; 2;<br>执行结果如下：</p>
+<p>可以发现，Extra 这一列提示 Using index，使用到了覆盖索引，扫描的行数为 2。注意：这里的扫描行数指的是 MySQL 执行器从引擎取到两条记录，引擎内部可能会遍历到多条记录进行条件比较。</p>
+<p>最左匹配原则<br>由于 InnoDB 索引式 B+树构建的，因此可以利用索引的“最左前缀”来定位记录。</p>
+<p>也就是说，不仅仅是用到索引的全部定义字段会走索引，只要满足最左前缀，就可以利用索引来加速检索。这个最左前缀可以是联合索引的最左 n 个字段。</p>
+<p>索引条件下推(Using index condition)<br>索引条件下推 Index Condition Pushdown (ICP)，是针对 MySQL 使用索引从表中检索行的情况的一种优化。</p>
+<p>为什么叫下推呢，就是在满足要求的情况下，把索引的条件丢给存储引擎去判断，而不是把完整的记录传回 MySQL Server 层去判断。</p>
+<p>ICP 支持range, ref, eq_ref, 和 ref_or_null类型的查找，支持 MyISAM 和 InnoDB 存储引擎。</p>
+<p>不能将引用子查询的条件下推，触发条件不能下推。详细规则参考：Index Condition Pushdown</p>
+<p>如果不使用 ICP，则存储引擎将遍历索引以在聚集索引中定位行，并将结果返回给 MySQL Server 层，MySQL Server 层继续根据WHERE条件进行筛选行。</p>
+<p>启用 ICP 后，如果WHERE可以仅使用索引中的列来评估部分条件，则 MySQL Server 层会将这部分条件压入WHERE条件下降到存储引擎。然后，存储引擎通过使用索引条目来判断索引条件，在满足条件的情况下，才回表去查找记录返回给 MySQL Server 层。</p>
+<p>ICP 的目标是减少回表扫描的行数，从而减少 I / O 操作。对于InnoDB表，ICP 仅用于二级索引。</p>
+<p>使用索引下推的时候，执行计划中的 Extra 会提示：Using index condition，而不是Using index，因为必须回表查询整行数据。Using index代表使用到了覆盖索引。</p>
+<p>3.8、InnoDB Data Directory<br>InnoDB 数据字典(Data Directory)存放于系统表空间中，主要包含元数据，用于追踪表、索引、表字段等信息。由于历史的原因，InnoDB 数据字典中的元数据与.frm文件中的元数据重复了。</p>
+<p>3.9、Doublewrite Buffer<br>双写缓冲区(Doublewrite Buffer)是一个存储区，是 InnoDB 在 tablespace 上的 128 个页（2 个区），大小是 2MB[7]。</p>
+<p>版本区别：在 MySQL 8.0.20 之前，doublewrite 缓冲区存储区位于InnoDB系统表空间中。从 MySQL 8.0.20 开始，doublewrite 缓冲区存储区位于 doublewrite 文件中。</p>
+<p>本文基于 MySQL 5.7 编写。</p>
+<p>操作系统写文件是以 4KB 为单位的，那么每写一个 InnoDB 的 page 到磁盘上，操作系统需要写 4 个块。如果写入 4 个块的过程中出现系统崩溃，那么会导致 16K 的数据只有一部分写是成功的，这种情况下就是partial page write（部分页写入）问题。</p>
+<p>InnoDB 这个时候是没法通过 redo log 来恢复的，因为这个时候页面的Fil Trailer（Fil Trailer 主要存放FIL_PAGE_END_LSN，主要包含页面校验和以及最后的事务）中的数据是有问题的。</p>
+<p>为此，每当 InnoDB 将页面写入到数据文件中的适当位置之前，都会首先将其写入双写缓冲区。只有将缓冲区安全地刷新到磁盘后，InnoDB 才会将页面写入最终的数据文件。</p>
+<p>如果在页面写入过程中发生操作系统或者 mysqld 进程崩溃，则 InnoDB 可以在崩溃恢复期间从双写缓冲区中找到页面的完好副本用于恢复。恢复时，InnoDB 扫描双写缓冲区，并为缓冲区中的每个有效页面检查数据文件中的页面是否完整。</p>
+<p>如果系统表空间文件（“ ibdata 文件 ”）位于支持原子写的 Fusion-io 设备上，则自动禁用双写缓冲，并且将 Fusion-io 原子写用于所有数据文件。</p>
+<p>3.10、Redo Log<br>重做日志(Redo Log)主要适用于数据库的崩溃恢复，用于实现数据的完整性。</p>
+<p>重做日志由两部分组成：</p>
+<p>重做日志缓冲区 Log Buffer；</p>
+<p>重做日志文件，重做日志文件在磁盘上由两个名为ib_logfile0和ib_logfile1的物理文件表示。</p>
+<p>为了实现数据完整性，在脏页刷新到磁盘之前，必须先把重做日志写入到磁盘。除了数据页，聚集索引、辅助索引以及 Undo Log 都需要记录重做日志。</p>
+<p>3.10.1、Redo Log 在事务中的写入时机<br>在事务中，除了写 Redo log，还需要写 binlog，为此，我们先来简单介绍下 binlog。</p>
+<p>3.10.1.1、binlog<br>全写：Binary Log，二进制 log。二进制日志是一组日志文件。其中包含有关对 MySQL 服务器实例进行的数据修改的信息。</p>
+<p>Redo Log 是 InnoDB 引擎特有的，而 binlog 是 MySQL 的 Server 层实现的，所有引擎都可以使用。</p>
+<p>Redo Log 的文件是循环写的，空间会用完，binlog 日志是追加写的，不会覆盖以前的日志。</p>
+<p>binlog 主要的目的：</p>
+<p>主从同步，主服务器将二进制日志中包含的事件发送到从服务器，从服务器执行这些事件，以保持和主服务器相同的数据更改；</p>
+<p>某些数据恢复操作需要使用二进制日志，还原到某一个备份点。</p>
+<p>binlog 主要是用于主从同步和数据恢复，Redo Log 主要是用于实现事务数据的完整性，让 InnoDB 具有不会丢失数据的能力，又称为 crash-safe。</p>
+<p>binlog 日志的两种记录形式：</p>
+<p>基于 SQL 的日志记录：事件包含产生数据更改(插入，新增，删除)的 SQL 语句；</p>
+<p>基于行的日志记录：时间描述对单个行的更改。</p>
+<p>混合日志记录默认情况下使用基于语句的日志记录，但根据需要自动切换到基于行的日志记录。</p>
+<p>3.10.1.2、Redo Log 在事务中的写入时机<br>简单的介绍完 binlog，我们再来看看 Redo Log 的写入流程。</p>
+<p>假设我们这里执行一条 sql</p>
+<p>update t20 set a=10 where id=1;<br>执行流程如下：</p>
+<p>3.10.2、如何保证数据不丢失<br>前面我们介绍Log Buffer的时候，提到过，为了保证数据不丢失，我们需要执行以下操作：</p>
+<p>如果启用了 binlog，则设置：sync_binlog=1;</p>
+<p>innodb_flush_log_at_trx_commit=1;</p>
+<p>sync_binlog=0：表示每次提交事务都只 write，不 fsync；</p>
+<p>sync_binlog=1：表示每次提交事务都会执行 fsync；</p>
+<p>sync_binlog=N(N&gt;1) ：表示每次提交事务都 write，但累积 N 个事务后才 fsync。</p>
+<p>这两个的作用相当于在上面的流程最后一步，提交事务接口返回 Server 层之前，把 binlog cache 和 log buffer 都 fsync 到磁盘中了，这样就保证了数据的落盘，不会丢失，即使奔溃了，也可以通过 binlog 和 redo log 恢复数据相关流程如下：</p>
+<p>在磁盘和内存中的处理流程如下面编号所示：</p>
+<p>其中第四步 log buffer 持久化到磁盘的时机为：</p>
+<p>log buffer 占用的空间即将达到innodb_log_buffer_size一半的时候，后台线程主动写盘；</p>
+<p>InnoDB 后台有个线程，每隔 1 秒会把 log buffer 刷到磁盘；</p>
+<p>由于 log buffer 是所有线程共享的，当其他事务线程提交时也会导致已写入 log buffer 但还未提交的事务的 redo log 一起刷新到磁盘</p>
+<p>其中第五步：脏页刷新到磁盘的时机为：</p>
+<p>系统内存不足，需要淘汰脏页的时候，要把脏页同步回磁盘；</p>
+<p>MySQL 空闲的时候；</p>
+<p>MySQL 正常关闭的时候，会把脏页 flush 到磁盘。</p>
+<p>参数innodb_max_dirty_pages_pct是脏页比例上限，默认值是 75%。</p>
+<p>为什么第二步 redo log prepare 状态也要写磁盘？</p>
+<p>因为这里先写了，才能确保在把 binlog 写到磁盘后崩溃，能够恢复数据：如果判断到 redo log 是 prepare 状态，那么查看是否存 XID 对应的 binlog，如果存在，则表示事务成功提交，需要用 prepare 状态的 redo log 进行恢复。</p>
+<p>这样即使崩溃了，也可以通过 redo log 来进行恢复了，恢复流程如下：</p>
+<p>Redo Log 是循环写的，如下图:</p>
+<p>writepos 记录了当前写的位置，一边写位置一边往前推进，当 writepos 与 checkpoint 重叠的时候就表示 logfile 写满了，绿色部分表示是空闲的空间，红色部分是写了 redo log 的空间；</p>
+<p>checkpoint 处标识了当前的LSN，每当系统崩溃重启，都会从当前 checkpoint 这个位置执行重做日志，根据重做日志逐个确认数据页是否没问题，有问题就通过 redo log 进行修复。</p>
+<p>LSN Log Sequence Number 的缩写。代表日志序列号。在 InnoDB 中，LSN 占用 8 个字节，单调递增，LSN 的含义：</p>
+<p>重做日志写入的总量；</p>
+<p>checkpoint 的位置；</p>
+<p>页的版本；</p>
+<p>除了重做日志中有 LSN，每个页的头部也是有存储了该页的 LSN，我们前面介绍页面格式的时候有介绍过。</p>
+<p>在页中 LSN 表示该页最后刷新时 LSN 的大小。[8]</p>
+<p>3.11、Undo Logs<br>上面说的 redo log 记录了事务的行为，可以通过其对页进行重做操作，但是食物有时候需要进行回滚，这时候就需要 undo log 了。[15]</p>
+<p>关于 Undo Log 的存储：InnoDB 中有回滚段(rollback segment)，每个回滚段记录 1024 个 undo log segment，在每个 undo log segment 段中进行申请 undo 页。系统表空间偏移量为 5 的页记录了所有的 rollback segment header 所在的页。</p>
+<p>3.11.1、undo log 的格式<br>根据行为不同分为两种：</p>
+<p>insert undo log</p>
+<p>insert undo log：只对事务本身可见，所以 insert undo log 在事务提交后可直接删除，无需执行 purge 操作；</p>
+<p>insert undo log 主要记录了：</p>
+<p>假设在事务 1001 中，执行以下 sql，t20 的 table_id 为 10：</p>
+<p>insert into t20(id, a, b, c, d) values(12, 2, 3, 1, “init”)<br>那么对应会生成一条 undo log：</p>
+<p>update undo log</p>
+<p>update undo log：执行 update 或者 delete 会产生 undo log，会影响已存在的记录，为了实现 MVCC(后边介绍)，update undo log 不能再事务提交时立刻删除，需要将事务提交时放入到 history list 上，等待 purge 线程进行最后的删除操作。</p>
+<p>update undo log 主要记录了：</p>
+<p>假设在事务 1002 中，执行以下 sql，t20 的 table_id 为 10：</p>
+<p>update t20 set d=”update1” where id=60;<br>那么对应会生成一条 undo log：</p>
+<p>如上图，每回退应用一个 undo log，就回退一个版本，这就是 MVCC(Multi versioning concurrency control)的实现原理。</p>
+<p>下面我们在执行一个 delete sql：</p>
+<p>delete from t20 where id=60;<br>对应的 undo log 变为如下：</p>
+<p>如上图，实际的行记录不会立刻删除，而是在行记录头信息记录了一个deleted_flag标志位。最终会在 purge 线程 purge undo log 的时候进行实际的删除操作，这个时候 undo log 也会清理掉。</p>
+<p>3.11.2、MVCC 实现原理<br>如上图所示，MySQL 只会有一个行记录，但是会把每次æ</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://example.com/2021/07/14/Mysql%E6%9E%B6%E6%9E%84%E5%8E%9F%E7%90%86/" data-id="ckr336fo60000e7vyg6f7fkk1" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2021/07/14/java%E6%96%87%E4%BB%B6%E8%BF%90%E8%A1%8C%E5%85%A8%E6%B5%81%E7%A8%8B%E5%8F%8AJVM%E7%B1%BB%E5%8A%A0%E8%BD%BD%E6%9C%BA%E5%88%B6/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">java文件运行全流程及JVM类加载机制</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Categories</h3>
+    <div class="widget">
+      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/Python%E5%9F%BA%E7%A1%80/">Python基础</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/">java</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/mysql/">mysql</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/07/">July 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/11/">November 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/08/">August 2019</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2021/07/14/Mysql%E6%9E%B6%E6%9E%84%E5%8E%9F%E7%90%86/">Mysql架构原理</a>
+          </li>
+        
+          <li>
+            <a href="/2021/07/14/java%E6%96%87%E4%BB%B6%E8%BF%90%E8%A1%8C%E5%85%A8%E6%B5%81%E7%A8%8B%E5%8F%8AJVM%E7%B1%BB%E5%8A%A0%E8%BD%BD%E6%9C%BA%E5%88%B6/">java文件运行全流程及JVM类加载机制</a>
+          </li>
+        
+          <li>
+            <a href="/2021/07/14/Mysql%20%E7%B4%A2%E5%BC%95%E5%BA%95%E5%B1%82%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">Mysql底层原理</a>
+          </li>
+        
+          <li>
+            <a href="/2021/07/14/MySQL%E6%9E%B6%E6%9E%84%E5%8E%9F%E7%90%86/">Mysql架构原理</a>
+          </li>
+        
+          <li>
+            <a href="/2020/11/12/hello-world/">Hello World</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2021 黄自在<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+  </div>
+</body>
+</html>
