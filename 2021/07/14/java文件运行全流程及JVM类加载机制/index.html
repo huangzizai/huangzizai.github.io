@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+
+  
+  <title>java文件运行全流程及JVM类加载机制 | 黄自在的博客</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="一、java文件运行的全部过程是怎么样的呢？java源文件到最后运行起来，主要会经过两个阶段： 1、.java文件通过java编译器（javac.exe）编译成.class文件，这个就是所说的字节码文件。 2、.class文件加载到jvm进行运行  二、JVM是如何来处理.class文件的首先来分析下JVM到底是个怎么样的东西  JVM被分为三个主要的子系统 （1）类加载器子系统（2）运行时数据区">
+<meta property="og:type" content="article">
+<meta property="og:title" content="java文件运行全流程及JVM类加载机制">
+<meta property="og:url" content="http://example.com/2021/07/14/java%E6%96%87%E4%BB%B6%E8%BF%90%E8%A1%8C%E5%85%A8%E6%B5%81%E7%A8%8B%E5%8F%8AJVM%E7%B1%BB%E5%8A%A0%E8%BD%BD%E6%9C%BA%E5%88%B6/index.html">
+<meta property="og:site_name" content="黄自在的博客">
+<meta property="og:description" content="一、java文件运行的全部过程是怎么样的呢？java源文件到最后运行起来，主要会经过两个阶段： 1、.java文件通过java编译器（javac.exe）编译成.class文件，这个就是所说的字节码文件。 2、.class文件加载到jvm进行运行  二、JVM是如何来处理.class文件的首先来分析下JVM到底是个怎么样的东西  JVM被分为三个主要的子系统 （1）类加载器子系统（2）运行时数据区">
+<meta property="og:locale">
+<meta property="og:image" content="https://pic2.zhimg.com/80/v2-622285a8b4b8af51c35fca7651e27841_720w.jpg">
+<meta property="og:image" content="https://pic4.zhimg.com/80/v2-73ccd948b2d98055aa28261a18dd145b_720w.jpg">
+<meta property="og:image" content="https://pic3.zhimg.com/80/v2-47aa98c43ce12ca677988f6155c4dfc6_720w.jpg">
+<meta property="og:image" content="https://pic3.zhimg.com/v2-c1327f2c6d150f660a4150e0ccb4137a_180x120.jpg">
+<meta property="og:image" content="https://pic3.zhimg.com/80/v2-2ad919c408fbaba374cb93f020829312_720w.jpg">
+<meta property="article:published_time" content="2021-07-14T03:14:05.000Z">
+<meta property="article:modified_time" content="2021-07-14T03:14:46.152Z">
+<meta property="article:author" content="黄自在">
+<meta property="article:tag" content="java">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://pic2.zhimg.com/80/v2-622285a8b4b8af51c35fca7651e27841_720w.jpg">
+  
+    <link rel="alternate" href="/atom.xml" title="黄自在的博客" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+<meta name="generator" content="Hexo 5.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">黄自在的博客</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://example.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-java文件运行全流程及JVM类加载机制" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2021/07/14/java%E6%96%87%E4%BB%B6%E8%BF%90%E8%A1%8C%E5%85%A8%E6%B5%81%E7%A8%8B%E5%8F%8AJVM%E7%B1%BB%E5%8A%A0%E8%BD%BD%E6%9C%BA%E5%88%B6/" class="article-date">
+  <time datetime="2021-07-14T03:14:05.000Z" itemprop="datePublished">2021-07-14</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      java文件运行全流程及JVM类加载机制
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h2 id="一、java文件运行的全部过程是怎么样的呢？"><a href="#一、java文件运行的全部过程是怎么样的呢？" class="headerlink" title="一、java文件运行的全部过程是怎么样的呢？"></a>一、java文件运行的全部过程是怎么样的呢？</h2><p>java源文件到最后运行起来，主要会经过两个阶段：</p>
+<p>1、.java文件通过java编译器（javac.exe）编译成.class文件，这个就是所说的字节码文件。</p>
+<p>2、.class文件加载到jvm进行运行</p>
+<p><img src="https://pic2.zhimg.com/80/v2-622285a8b4b8af51c35fca7651e27841_720w.jpg" alt="img"></p>
+<h2 id="二、JVM是如何来处理-class文件的"><a href="#二、JVM是如何来处理-class文件的" class="headerlink" title="二、JVM是如何来处理.class文件的"></a>二、JVM是如何来处理.class文件的</h2><p>首先来分析下JVM到底是个怎么样的东西</p>
+<p><img src="https://pic4.zhimg.com/80/v2-73ccd948b2d98055aa28261a18dd145b_720w.jpg" alt="img"></p>
+<p>JVM被分为三个主要的子系统</p>
+<p>（1）类加载器子系统（2）运行时数据区（3）执行引擎</p>
+<p><strong>1.</strong> <strong>类加载器子系统</strong></p>
+<p><img src="https://pic3.zhimg.com/80/v2-47aa98c43ce12ca677988f6155c4dfc6_720w.jpg" alt="img"></p>
+<p>加载、验证、准备和初始化这四个阶段发生的顺序是确定的，而解析阶段则不一定，它在某些情况下可以在初始化阶段之后开始，这是为了支持Java语言的运行时绑定（也成为动态绑定或晚期绑定）。另外注意这里的几个阶段是按顺序开始，而不是按顺序进行或完成，因为这些阶段通常都是互相交叉地混合进行的，通常在一个阶段执行的过程中调用或激活另一个阶段。</p>
+<p>•<strong>加载</strong></p>
+<p><a href="https://link.zhihu.com/?target=https://www.cnblogs.com/ityouknow/p/5603287.html">jvm系列(一):java类的加载机制 - 纯洁的微笑 - 博客园www.cnblogs.com<img src="https://pic3.zhimg.com/v2-c1327f2c6d150f660a4150e0ccb4137a_180x120.jpg" alt="图标"></a></p>
+<p>加载是类加载过程的第一个阶段，在加载阶段，虚拟机需要完成以下三件事情：</p>
+<blockquote>
+<p>① 通过一个类的全限定名来获取其定义的二进制字节流。<br>② 将这个字节流所代表的静态存储结构转化为方法区的运行时数据结构。<br>③ 在Java堆中生成一个代表这个类的java.lang.Class对象，作为对方法区中这些数据的访问入口。</p>
+</blockquote>
+<p>相对于类加载的其他阶段而言，加载阶段（准确地说，是加载阶段获取类的二进制字节流的动作）是可控性最强的阶段，因为开发人员既可以使用系统提供的类加载器来完成加载，也可以自定义自己的类加载器来完成加载。</p>
+<p>加载阶段完成后，虚拟机外部的 二进制字节流就按照虚拟机所需的格式存储在方法区之中，而且在Java堆中也创建一个java.lang.Class类的对象，这样便可以通过该对象访问方法区中的这些数据。</p>
+<p>•<strong>连接</strong></p>
+<p>1）验证：确保被加载的类的正确性</p>
+<p>验证是连接阶段的第一步，这一阶段的目的是为了确保Class文件的字节流中包含的信息符合当前虚拟机的要求，并且不会危害虚拟机自身的安全。验证阶段大致会完成4个阶段的检验动作：</p>
+<blockquote>
+<p><strong>文件格式验证</strong>：验证字节流是否符合Class文件格式的规范；例如：是否以0xCAFEBABE开头、主次版本号是否在当前虚拟机的处理范围之内、常量池中的常量是否有不被支持的类型。<br><strong>元数据验证</strong>：对字节码描述的信息进行语义分析（注意：对比javac编译阶段的语义分析），以保证其描述的信息符合Java语言规范的要求；例如：这个类是否有父类，除了java.lang.Object之外。<br><strong>字节码验证</strong>：通过数据流和控制流分析，确定程序语义是合法的、符合逻辑的。<br><strong>符号引用验证</strong>：确保解析动作能正确执行。</p>
+</blockquote>
+<p>验证阶段是非常重要的，但不是必须的，它对程序运行期没有影响，如果所引用的类经过反复验证，那么可以考虑采用-Xverifynone参数来关闭大部分的类验证措施，以缩短虚拟机类加载的时间。</p>
+<p>2）准备：为类的<strong>静态变量</strong>分配内存，并将其初始化为默认值</p>
+<p>准备阶段是正式为类变量分配内存并设置类变量初始值的阶段，这些内存都将在方法区中分配。对于该阶段有以下几点需要注意：</p>
+<blockquote>
+<p>① 这时候进行内存分配的仅包括类变量（static），而不包括实例变量，实例变量会在对象实例化时随着对象一块分配在Java堆中。<br>② 这里所设置的初始值通常情况下是数据类型默认的零值（如0、0L、null、false等），而不是被在Java代码中被显式地赋予的值。</p>
+</blockquote>
+<p>假设一个类变量的定义为：public static int value = 3；</p>
+<p>那么变量value在准备阶段过后的初始值为0，而不是3，因为这时候尚未开始执行任何Java方法，而把value赋值为3的putstatic指令是在程序编译后，存放于类构造器<clinit>（）方法之中的，所以把value赋值为3的动作将在初始化阶段才会执行</p>
+<p>3）解析：<strong>把类中的符号引用转换为直接引用</strong></p>
+<p>解析阶段是虚拟机将常量池内的符号引用替换为直接引用的过程，解析动作主要针对类或接口、字段、类方法、接口方法、方法类型、方法句柄和调用点限定符7类符号引用进行。<strong>符号引用</strong>就是一组符号来描述目标，可以是任何字面量。</p>
+<p><strong>直接引用</strong>就是直接指向目标的指针、相对偏移量或一个间接定位到目标的句柄。</p>
+<ul>
+<li>初始化</li>
+</ul>
+<p>类初始化阶段是类加载的最后一步，前面的类加载过程中，除了在加载阶段用户用程序可以通过自定义类加载器参与之外，其余动作完全由虚拟机主导和控制。到了初始化阶段，才真正开始执行类中定义的Java程序代码（或者说字节码）。这里所有的<strong>静态变量会被赋初始值</strong>, 并且<strong>静态块将被执行。</strong></p>
+<p>java中，对于初始化阶段，有且只有**以下五种情况才会对要求类立刻初始化：</p>
+<blockquote>
+<p>① 使用new关键字实例化对象、访问或者设置一个类的静态字段（被final修饰、编译器优化时已经放入常量池的例外）、调用类方法，都会初始化该静态字段或者静态方法所在的类；<br>② 初始化类的时候，如果其父类没有被初始化过，则要先触发其父类初始化；<br>③ 使用java.lang.reflect包的方法进行反射调用的时候，如果类没有被初始化，则要先初始化；<br>④ 虚拟机启动时，用户会先初始化要执行的主类（含有main）；<br>⑤ jdk 1.7后，如果java.lang.invoke.MethodHandle的实例最后对应的解析结果是 REF_getStatic、REF_putStatic、REF_invokeStatic方法句柄，并且这个方法所在类没有初始化，则先初始化；</p>
+</blockquote>
+<p><strong>2、运行时数据</strong></p>
+<p>运行时数据区域被划分为5个主要组件：</p>
+<blockquote>
+<p>① 方法区 (线程共享) 常量 静态变量 JIT(即时编译器)编译后代码也在方法区存放<br>② 堆内存(线程共享) 垃圾回收的主要场地<br>③ 程序计数器 当前线程执行的字节码的位置指示器<br>④ Java虚拟机栈(栈内存) :保存局部变量,基本数据类型以及堆内存中对象的引用变量<br>⑤ 本地方法栈 (C栈):为JVM提供使用native方法的服务</p>
+</blockquote>
+<p><img src="https://pic3.zhimg.com/80/v2-2ad919c408fbaba374cb93f020829312_720w.jpg" alt="img"></p>
+<p><strong>3、执行引擎</strong></p>
+<p>分配给运行时数据区的字节码将由执行引擎执行。执行引擎读取字节码并逐段执行。</p>
+<blockquote>
+<p><strong>① 解释器</strong>: 解释器能快速的<strong>解释字节码</strong>，但执行却很慢。 解释器的缺点就是,当一个方法被调用多次，每次都需要重新解释。<br><strong>② 编译器：</strong>JIT编译器消除了解释器的缺点。执行引擎利用解释器转换字节码，但如果是重复的代码则使用<strong>JIT编译器将全部字节码编译成本机代码</strong>。</p>
+</blockquote>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://example.com/2021/07/14/java%E6%96%87%E4%BB%B6%E8%BF%90%E8%A1%8C%E5%85%A8%E6%B5%81%E7%A8%8B%E5%8F%8AJVM%E7%B1%BB%E5%8A%A0%E8%BD%BD%E6%9C%BA%E5%88%B6/" data-id="ckr2wu5wg0000eevygflu2osy" class="article-share-link">Share</a>
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2021/07/14/Mysql%20%E7%B4%A2%E5%BC%95%E5%BA%95%E5%B1%82%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">Mysql底层原理</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Categories</h3>
+    <div class="widget">
+      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/Python%E5%9F%BA%E7%A1%80/">Python基础</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/mysql/">mysql</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tags</h3>
+    <div class="widget">
+      <ul class="tag-list" itemprop="keywords"><li class="tag-list-item"><a class="tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tag Cloud</h3>
+    <div class="widget tagcloud">
+      <a href="/tags/java/" style="font-size: 10px;">java</a>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/07/">July 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/11/">November 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/08/">August 2019</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2021/07/14/java%E6%96%87%E4%BB%B6%E8%BF%90%E8%A1%8C%E5%85%A8%E6%B5%81%E7%A8%8B%E5%8F%8AJVM%E7%B1%BB%E5%8A%A0%E8%BD%BD%E6%9C%BA%E5%88%B6/">java文件运行全流程及JVM类加载机制</a>
+          </li>
+        
+          <li>
+            <a href="/2021/07/14/Mysql%20%E7%B4%A2%E5%BC%95%E5%BA%95%E5%B1%82%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">Mysql底层原理</a>
+          </li>
+        
+          <li>
+            <a href="/2020/11/12/hello-world/">Hello World</a>
+          </li>
+        
+          <li>
+            <a href="/2019/08/01/test/">Python编程惯例</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2021 黄自在<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+  </div>
+</body>
+</html>
